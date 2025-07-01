@@ -20,6 +20,9 @@ from email.policy import default
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple
 
+# Import database configuration
+import database_config
+
 
 class EmailMetadataExtractor:
     """Class for extracting metadata from email files."""
@@ -31,6 +34,13 @@ class EmailMetadataExtractor:
         self.metadata = {}
         self.related_emails = []
         self.db_connection = None
+        
+        # Import database configuration here to avoid circular imports
+        try:
+            from database_config import get_db_connection
+            self.get_db_connection = get_db_connection
+        except ImportError:
+            self.get_db_connection = None
 
     def load_email(self) -> email.message.Message:
         """Load email from file or content."""
@@ -145,16 +155,50 @@ class EmailMetadataExtractor:
         """Search for information in databases related to the email domains."""
         results = {}
         
-        # This would connect to actual databases in a real implementation
-        # For demonstration, we'll simulate some database searches
+        # Try to import database functions
+        try:
+            from database_config import search_domain_info, search_related_emails
+            use_real_db = True
+        except ImportError:
+            use_real_db = False
+        
         for domain in self.metadata.get('domains', []):
-            results[domain] = self._simulate_database_search(domain)
+            if use_real_db:
+                # Use real database functions
+                domain_info_dict = search_domain_info(domain)
+                
+                if domain_info_dict:
+                    domain_info = {
+                        "registrar": domain_info_dict.get('registrar', 'Unknown'),
+                        "creation_date": domain_info_dict.get('creation_date', 'Unknown'),
+                        "expiration_date": domain_info_dict.get('expiration_date', 'Unknown')
+                    }
+                    
+                    # Get related emails
+                    related_emails_list = search_related_emails(domain)
+                    related_emails = [email_dict.get('email_address') for email_dict in related_emails_list]
+                else:
+                    # Domain not found in database, use fallback
+                    results[domain] = self._simulate_database_search(domain)
+                    continue
+            else:
+                # Fall back to simulation if no database configuration
+                results[domain] = self._simulate_database_search(domain)
+                continue
             
+            results[domain] = {
+                "domain_info": domain_info,
+                "related_emails": related_emails
+            }
+        
         return results
 
     def _simulate_database_search(self, domain: str) -> Dict[str, Any]:
-        """Simulate a database search for a domain."""
-        # In a real implementation, this would query actual databases
+        """Simulate a database search for a domain.
+        
+        This is a fallback method used when no database connection is available.
+        """
+        # This is only used if the real database connection is not available
         return {
             "domain_info": {
                 "registrar": "Example Registrar Inc.",
@@ -198,20 +242,113 @@ class EmailMetadataExtractor:
             
         return list(set(alternate_emails))  # Remove duplicates
 
-    def modify_alternate_email(self, original_email: str, new_email: str) -> bool:
-        """Modify an alternate email address in relevant systems."""
-        # In a real implementation, this would update actual databases or systems
-        print(f"Modifying email: {original_email} -> {new_email}")
-        return True
+    def modify_alternate_email(self, old_email: str, new_email: str) -> bool:
+        """Modify an alternate email address."""
+        # Check if we have a database connection function
+        if not self.get_db_connection:
+            # Fall back to in-memory modification if no database configuration
+            if old_email in self.related_emails:
+                self.related_emails.remove(old_email)
+                self.related_emails.append(new_email)
+                return True
+            return False
+        
+        # Use actual database connection
+        conn = self.get_db_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Check if the old email exists in the database
+            cursor.execute("SELECT id FROM related_emails WHERE email_address = ?", (old_email,))
+            email_row = cursor.fetchone()
+            
+            if email_row:
+                # Update the email address
+                cursor.execute(
+                    "UPDATE related_emails SET email_address = ? WHERE id = ?", 
+                    (new_email, email_row[0])
+                )
+                conn.commit()
+                
+                # Also update in-memory list if it exists there
+                if old_email in self.related_emails:
+                    self.related_emails.remove(old_email)
+                    self.related_emails.append(new_email)
+                
+                return True
+            else:
+                return False
+        except Exception as e:
+            print(f"Database error when modifying email: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
 
     def to_json(self) -> str:
         """Convert metadata to JSON string."""
         return json.dumps(self.metadata, indent=2, default=str)
 
-    def save_to_file(self, output_path: str) -> None:
-        """Save metadata to a JSON file."""
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(self.metadata, f, indent=2, default=str)
+    def save_to_file(self, output_file: str) -> bool:
+        """Save the extracted metadata to a JSON file.
+        
+        Args:
+            output_file: Path to the output file
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(self.to_json())
+            return True
+        except Exception as e:
+            print(f"Error saving to file: {e}")
+            return False
+            
+    def save_to_database(self) -> Optional[int]:
+        """Save the extracted metadata to the database.
+        
+        Returns:
+            Optional[int]: The ID of the newly added metadata record, or None if the operation failed
+        """
+        try:
+            # Ensure metadata has been extracted
+            if not hasattr(self, 'metadata') or not self.metadata:
+                self.extract_metadata()
+                
+            # Get required fields for database
+            message_id = self.metadata.get('message_id', '')
+            sender = self.metadata.get('from', '')
+            recipient = self.metadata.get('to', '')
+            subject = self.metadata.get('subject', '')
+            date = self.metadata.get('date', '')
+            
+            # Convert metadata to JSON string
+            metadata_json = self.to_json()
+            
+            # Save to database using the database_config module
+            metadata_id = database_config.save_email_metadata(
+                message_id, sender, recipient, subject, date, metadata_json
+            )
+            
+            # If successful, also save any domains and related emails found
+            if metadata_id:
+                # Extract domains from email addresses
+                domains = self.metadata.get('domains', [])
+                
+                # For each domain, check if it exists in the database
+                for domain in domains:
+                    domain_info = database_config.search_domain_info(domain)
+                    if not domain_info:  # Domain doesn't exist, add it
+                        # In a real application, you might want to fetch real domain info
+                        # For now, we'll just add the domain with placeholder data
+                        domain_id = database_config.add_or_update_domain(domain)
+            
+            return metadata_id
+        except Exception as e:
+            print(f"Error saving to database: {e}")
+            return None
 
 
 def main():
@@ -221,6 +358,7 @@ def main():
     parser.add_argument('--output', '-o', help='Output file for metadata JSON')
     parser.add_argument('--discover', '-d', action='store_true', help='Discover alternate emails')
     parser.add_argument('--modify', '-m', nargs=2, metavar=('ORIGINAL', 'NEW'), help='Modify alternate email')
+    parser.add_argument('--save-to-db', '-s', action='store_true', help='Save extracted metadata to database')
     
     args = parser.parse_args()
     
@@ -235,10 +373,17 @@ def main():
         metadata = extractor.extract_metadata()
         print("Metadata extracted successfully")
         
+        if args.save_to_db:
+            metadata_id = extractor.save_to_database()
+            if metadata_id:
+                print(f"Metadata saved to database with ID: {metadata_id}")
+            else:
+                print("Failed to save metadata to database")
+        
         if args.output:
             extractor.save_to_file(args.output)
             print(f"Metadata saved to {args.output}")
-        else:
+        elif not args.save_to_db:
             print(extractor.to_json())
             
         if args.discover:

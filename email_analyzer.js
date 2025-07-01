@@ -48,6 +48,12 @@ function setupEventListeners() {
     if (modifyEmailForm) {
         modifyEmailForm.addEventListener('submit', handleModifyEmail);
     }
+    
+    // Database search form
+    const databaseSearchForm = document.getElementById('database-search-form');
+    if (databaseSearchForm) {
+        databaseSearchForm.addEventListener('submit', handleDatabaseSearch);
+    }
 }
 
 /**
@@ -86,7 +92,13 @@ async function handleEmailUpload(event) {
     showStatusMessage('Uploading and processing email...', 'info');
     
     const formData = new FormData();
-    formData.append('email_file', file);
+    formData.append('file', file);
+    
+    // Check if we should save to database
+    const saveToDb = document.getElementById('use-real-db')?.checked || false;
+    if (saveToDb) {
+        formData.append('save_to_db', 'true');
+    }
     
     try {
         const response = await fetch('/api/extract-metadata', {
@@ -99,11 +111,19 @@ async function handleEmailUpload(event) {
         }
         
         const data = await response.json();
-        currentMetadata = data.metadata;
+        currentMetadata = data;
         
         // Display the metadata
         displayMetadata(currentMetadata);
-        showStatusMessage('Email metadata extracted successfully', 'success');
+        
+        // Show appropriate message based on whether it was saved to the database
+        if (data.saved_to_database) {
+            showStatusMessage('Email metadata extracted and saved to database successfully', 'success');
+        } else if (saveToDb) {
+            showStatusMessage('Email metadata extracted successfully, but could not be saved to database', 'warning');
+        } else {
+            showStatusMessage('Email metadata extracted successfully', 'success');
+        }
         
         // Enable database search and alternate email discovery buttons
         document.getElementById('search-databases-btn').disabled = false;
@@ -253,7 +273,7 @@ function displayMetadata(metadata) {
 }
 
 /**
- * Search related databases for information about the email domains
+ * Search related databases for information about domains in the email
  */
 async function searchRelatedDatabases() {
     if (!currentMetadata) {
@@ -264,12 +284,21 @@ async function searchRelatedDatabases() {
     showStatusMessage('Searching related databases...', 'info');
     
     try {
+        // Extract domains from the current metadata
+        const domains = currentMetadata.domains || [];
+        
+        // Use the real database if the checkbox is checked
+        const useRealDb = document.getElementById('use-real-db').checked;
+        
         const response = await fetch('/api/search-databases', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ metadata: currentMetadata })
+            body: JSON.stringify({ 
+                domains: domains,
+                use_real_db: useRealDb
+            })
         });
         
         if (!response.ok) {
@@ -277,11 +306,64 @@ async function searchRelatedDatabases() {
         }
         
         const data = await response.json();
-        displayDatabaseResults(data.results);
-        showStatusMessage('Database search completed', 'success');
         
+        if (data.success) {
+            displayDatabaseResults(data.results);
+            showStatusMessage('Database search completed', 'success');
+        } else {
+            showStatusMessage('Database search failed', 'error');
+        }
     } catch (error) {
         showStatusMessage(`Error searching databases: ${error.message}`, 'error');
+        console.error('Database search error:', error);
+    }
+}
+
+/**
+ * Handle database search form submission
+ * @param {Event} event - The form submit event
+ */
+async function handleDatabaseSearch(event) {
+    event.preventDefault();
+    
+    const searchTerm = document.getElementById('search-term').value.trim();
+    const searchType = document.getElementById('search-type').value;
+    const useRealDb = document.getElementById('use-real-db').checked;
+    
+    if (!searchTerm) {
+        showStatusMessage('Please enter a search term', 'error');
+        return;
+    }
+    
+    showStatusMessage(`Searching for ${searchType} containing "${searchTerm}"...`, 'info');
+    
+    try {
+        const response = await fetch('/api/search-email-metadata', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+                search_term: searchTerm,
+                search_type: searchType,
+                use_real_db: useRealDb
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Server responded with status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            displayEmailMetadataSearchResults(data.results, data.count);
+            showStatusMessage(`Found ${data.count} results for ${searchType} containing "${searchTerm}"`, 'success');
+        } else {
+            showStatusMessage(`Error searching database: ${data.error || 'Unknown error'}`, 'error');
+        }
+    } catch (error) {
+        showStatusMessage(`Error searching database: ${error.message}`, 'error');
         console.error('Database search error:', error);
     }
 }
@@ -327,9 +409,11 @@ function displayDatabaseResults(results) {
                 const row = document.createElement('tr');
                 
                 const keyCell = document.createElement('td');
+                keyCell.className = 'info-key';
                 keyCell.textContent = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                 
                 const valueCell = document.createElement('td');
+                valueCell.className = 'info-value';
                 valueCell.textContent = value;
                 
                 row.appendChild(keyCell);
@@ -349,13 +433,47 @@ function displayDatabaseResults(results) {
             const emailsList = document.createElement('ul');
             domainResults.related_emails.forEach(email => {
                 const listItem = document.createElement('li');
-                listItem.textContent = email;
-                emailsList.appendChild(listItem);
+                // Check if email is an object with email_address property (from real DB)
+                let emailAddress;
+                let description = '';
                 
-                // Add these to our alternate emails list if not already there
-                if (!alternateEmails.includes(email)) {
-                    alternateEmails.push(email);
+                if (typeof email === 'object' && email.email_address) {
+                    emailAddress = email.email_address;
+                    description = email.description || '';
+                    listItem.textContent = emailAddress;
+                    if (description) {
+                        listItem.textContent += ` (${description})`;
+                    }
+                    // Add to alternateEmails if not already there
+                    if (!alternateEmails.includes(emailAddress)) {
+                        alternateEmails.push(emailAddress);
+                    }
+                } else {
+                    // Simple string email (from simulated DB)
+                    emailAddress = email;
+                    listItem.textContent = emailAddress;
+                    // Add to alternateEmails if not already there
+                    if (!alternateEmails.includes(emailAddress)) {
+                        alternateEmails.push(emailAddress);
+                    }
                 }
+                
+                // Add button to add to alternate emails list
+                const addButton = document.createElement('button');
+                addButton.textContent = 'Add to Alternates';
+                addButton.className = 'btn-small';
+                addButton.addEventListener('click', () => {
+                    if (!alternateEmails.includes(emailAddress)) {
+                        alternateEmails.push(emailAddress);
+                        updateAlternateEmailsList();
+                        showStatusMessage(`Added ${emailAddress} to alternate emails list`, 'success');
+                    } else {
+                        showStatusMessage(`${emailAddress} is already in the alternate emails list`, 'info');
+                    }
+                });
+                
+                listItem.appendChild(addButton);
+                emailsList.appendChild(listItem);
             });
             
             domainSection.appendChild(emailsList);
@@ -368,6 +486,297 @@ function displayDatabaseResults(results) {
     if (alternateEmails.length > 0) {
         updateAlternateEmailsList();
     }
+}
+
+/**
+ * Display email metadata search results from the database
+ * @param {Array} results - The search results array
+ * @param {Number} count - The number of results found
+ */
+function displayEmailMetadataSearchResults(results, count) {
+    const resultsContainer = document.getElementById('database-results-container');
+    
+    // Clear previous content
+    resultsContainer.innerHTML = '';
+    
+    // Check if we have results
+    if (!results || results.length === 0) {
+        resultsContainer.innerHTML = '<p>No matching emails found in the database.</p>';
+        return;
+    }
+    
+    // Create a container for the results
+    const resultsDiv = document.createElement('div');
+    resultsDiv.className = 'email-metadata-results';
+    
+    // Add a header with search info
+    const searchInfo = document.createElement('div');
+    searchInfo.className = 'search-info';
+    searchInfo.innerHTML = `<p>Found <strong>${results.length}</strong> matching emails</p>`;
+    resultsDiv.appendChild(searchInfo);
+    
+    // Create a table for the results
+    const table = document.createElement('table');
+    table.className = 'results-table';
+    
+    // Add table header
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    ['Sender', 'Recipient', 'Subject', 'Date', 'Actions'].forEach(text => {
+        const th = document.createElement('th');
+        th.textContent = text;
+        headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+    
+    // Add table body
+    const tbody = document.createElement('tbody');
+    
+    results.forEach(result => {
+        const row = document.createElement('tr');
+        
+        // Add cells for each property
+        ['sender', 'recipient', 'subject', 'date'].forEach(prop => {
+            const cell = document.createElement('td');
+            cell.textContent = result[prop] || '';
+            row.appendChild(cell);
+        });
+        
+        // Add actions cell
+        const actionsCell = document.createElement('td');
+        
+        const viewButton = document.createElement('button');
+        viewButton.textContent = 'View Details';
+        viewButton.className = 'btn-small';
+        viewButton.addEventListener('click', () => {
+            viewEmailDetails(result);
+        });
+        
+        actionsCell.appendChild(viewButton);
+        row.appendChild(actionsCell);
+        
+        tbody.appendChild(row);
+    });
+    
+    table.appendChild(tbody);
+    resultsDiv.appendChild(table);
+    resultsContainer.appendChild(resultsDiv);
+}
+
+/**
+ * View detailed email metadata from database
+ * @param {Object} emailData - The email metadata object
+ */
+function viewEmailDetails(emailData) {
+    // Create a modal dialog for displaying the details
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    
+    const modalContent = document.createElement('div');
+    modalContent.className = 'modal-content';
+    
+    // Add close button
+    const closeButton = document.createElement('span');
+    closeButton.className = 'close-button';
+    closeButton.innerHTML = '&times;';
+    closeButton.addEventListener('click', () => {
+        document.body.removeChild(modal);
+    });
+    
+    // Add email details
+    const title = document.createElement('h3');
+    title.textContent = 'Email Details';
+    
+    const detailsContainer = document.createElement('div');
+    detailsContainer.className = 'email-details';
+    
+    // Try to parse the metadata_json field if it exists
+    let fullMetadata = emailData;
+    if (emailData.metadata_json) {
+        try {
+            fullMetadata = JSON.parse(emailData.metadata_json);
+        } catch (e) {
+            console.error('Error parsing metadata JSON:', e);
+        }
+    }
+    
+    // Display the metadata
+    const metadataTable = document.createElement('table');
+    metadataTable.className = 'metadata-table';
+    
+    // Add basic properties first
+    const basicProps = [
+        { key: 'message_id', label: 'Message ID' },
+        { key: 'sender', label: 'Sender' },
+        { key: 'recipient', label: 'Recipient' },
+        { key: 'subject', label: 'Subject' },
+        { key: 'date', label: 'Date' }
+    ];
+    
+    basicProps.forEach(prop => {
+        if (emailData[prop.key]) {
+            const row = document.createElement('tr');
+            
+            const labelCell = document.createElement('td');
+            labelCell.className = 'property-label';
+            labelCell.textContent = prop.label;
+            
+            const valueCell = document.createElement('td');
+            valueCell.className = 'property-value';
+            valueCell.textContent = emailData[prop.key];
+            
+            row.appendChild(labelCell);
+            row.appendChild(valueCell);
+            metadataTable.appendChild(row);
+        }
+    });
+    
+    // Add full metadata if available
+    if (typeof fullMetadata === 'object' && fullMetadata !== null) {
+        // Add additional properties from the full metadata
+        Object.entries(fullMetadata).forEach(([key, value]) => {
+            // Skip properties we've already displayed
+            if (basicProps.some(prop => prop.key === key)) {
+                return;
+            }
+            
+            // Skip complex objects/arrays for simplicity
+            if (typeof value === 'object' && value !== null) {
+                value = JSON.stringify(value);
+            }
+            
+            const row = document.createElement('tr');
+            
+            const labelCell = document.createElement('td');
+            labelCell.className = 'property-label';
+            labelCell.textContent = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            
+            const valueCell = document.createElement('td');
+            valueCell.className = 'property-value';
+            valueCell.textContent = value;
+            
+            row.appendChild(labelCell);
+            row.appendChild(valueCell);
+            metadataTable.appendChild(row);
+        });
+    }
+    
+    detailsContainer.appendChild(metadataTable);
+    
+    // Add all elements to the modal
+    modalContent.appendChild(closeButton);
+    modalContent.appendChild(title);
+    modalContent.appendChild(detailsContainer);
+    modal.appendChild(modalContent);
+    
+    // Add the modal to the document body
+    document.body.appendChild(modal);
+    
+    // Add event listener to close modal when clicking outside
+    window.addEventListener('click', function(event) {
+        if (event.target === modal) {
+            document.body.removeChild(modal);
+        }
+    });
+}
+    
+    // Check if there are any results
+    if (!results || results.length === 0) {
+        resultsContainer.innerHTML = '<p>No matching emails found in the database.</p>';
+        return;
+    }
+    
+    // Create a container for the results
+    const resultsDiv = document.createElement('div');
+    resultsDiv.className = 'email-metadata-results';
+    
+    // Add a header with the count
+    const header = document.createElement('h3');
+    header.textContent = `Found ${count} matching email(s)`;
+    resultsDiv.appendChild(header);
+    
+    // Create a table for the results
+    const table = document.createElement('table');
+    table.className = 'results-table';
+    
+    // Add table header
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    ['Sender', 'Recipient', 'Subject', 'Date', 'Actions'].forEach(text => {
+        const th = document.createElement('th');
+        th.textContent = text;
+        headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+    
+    // Add table body
+    const tbody = document.createElement('tbody');
+    
+    // Add a row for each result
+    results.forEach(email => {
+        const row = document.createElement('tr');
+        
+        // Add cells for each property
+        const senderCell = document.createElement('td');
+        senderCell.textContent = email.sender || 'N/A';
+        row.appendChild(senderCell);
+        
+        const recipientCell = document.createElement('td');
+        recipientCell.textContent = email.recipient || 'N/A';
+        row.appendChild(recipientCell);
+        
+        const subjectCell = document.createElement('td');
+        subjectCell.textContent = email.subject || 'N/A';
+        row.appendChild(subjectCell);
+        
+        const dateCell = document.createElement('td');
+        dateCell.textContent = email.date || 'N/A';
+        row.appendChild(dateCell);
+        
+        // Add a view details button
+        const actionsCell = document.createElement('td');
+        const viewButton = document.createElement('button');
+        viewButton.textContent = 'View Details';
+        viewButton.className = 'btn-secondary';
+        viewButton.onclick = () => viewEmailDetails(email);
+        actionsCell.appendChild(viewButton);
+        row.appendChild(actionsCell);
+        
+        tbody.appendChild(row);
+    });
+    
+    table.appendChild(tbody);
+    resultsDiv.appendChild(table);
+    resultsContainer.appendChild(resultsDiv);
+}
+
+/**
+ * View detailed information about an email from the database
+ * @param {Object} email - The email metadata object
+ */
+function viewEmailDetails(email) {
+    // Parse the metadata JSON
+    let metadata;
+    try {
+        metadata = JSON.parse(email.metadata_json);
+    } catch (error) {
+        console.error('Error parsing metadata JSON:', error);
+        showStatusMessage('Error parsing email metadata', 'error');
+        return;
+    }
+    
+    // Display the metadata
+    displayMetadata(metadata);
+    showStatusMessage('Loaded email metadata from database', 'success');
+    
+    // Set the current metadata
+    currentMetadata = metadata;
+    
+    // Enable database search and alternate email discovery buttons
+    document.getElementById('search-databases-btn').disabled = false;
+    document.getElementById('discover-emails-btn').disabled = false;
 }
 
 /**
