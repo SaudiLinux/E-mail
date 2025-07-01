@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>أداة استخراج بيانات البريد الإلكتروني</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>أداة استخراج بيانات البريد الإلكتروني</h1>
+            <p>استخرج البيانات الوصفية للبريد الإلكتروني، وابحث في قواعد البيانات المرتبطة، واكتشف وعدّل عناوين البريد الإلكتروني البديلة</p>
+        </header>
+        
+        <div id="status-container"></div>
+        
+        <div class="section">
+            <h2>تحميل ملف البريد الإلكتروني</h2>
+            <form id="email-upload-form">
+                <div class="form-group">
+                    <label for="email-file">اختر ملف البريد الإلكتروني:</label>
+                    <input type="file" id="email-file" accept=".eml,.msg,.txt" required>
+                </div>
+                <button type="submit" class="btn-primary">تحليل البريد الإلكتروني</button>
+            </form>
+        </div>
+        
+        <div class="section">
+            <h2>البيانات الوصفية للبريد الإلكتروني</h2>
+            <div id="metadata-container">
+                <p>لم يتم تحميل أي بريد إلكتروني بعد. يرجى تحميل ملف بريد إلكتروني أولاً.</p>
+            </div>
+            
+            <div class="form-group" style="margin-top: 20px;">
+                <button id="search-databases-btn" disabled>البحث في قواعد البيانات المرتبطة</button>
+                <button id="discover-emails-btn" disabled>اكتشاف عناوين البريد الإلكتروني البديلة</button>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>نتائج البحث في قواعد البيانات</h2>
+            <div id="database-results-container">
+                <p>لم يتم إجراء أي بحث في قواعد البيانات بعد.</p>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>عناوين البريد الإلكتروني البديلة</h2>
+            <div id="alternate-emails-container">
+                <p>لم يتم اكتشاف أي عناوين بريد إلكتروني بديلة بعد.</p>
+            </div>
+            
+            <div id="modify-email-section" class="hidden">
+                <h3>تعديل عنوان البريد الإلكتروني</h3>
+                <form id="modify-email-form">
+                    <div class="form-group">
+                        <label for="original-email">عنوان البريد الإلكتروني الأصلي:</label>
+                        <select id="original-email" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="new-email">عنوان البريد الإلكتروني الجديد:</label>
+                        <input type="email" id="new-email" required>
+                    </div>
+                    <button type="submit" class="btn-primary">تعديل عنوان البريد الإلكتروني</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <script src="email_analyzer.js"></script>
+</body>
+</html>

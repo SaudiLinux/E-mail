@@ -1,0 +1,50 @@
+{
+  "from": "John Doe <sender@example.com>",
+  "to": "Jane Smith <recipient@example.org>, Support Team <support@example.net>",
+  "cc": "Manager <manager@example.com>",
+  "bcc": "Archive <archive@example.com>",
+  "subject": "Important Information About Your Account",
+  "date": "Sun, 01 Jan 2023 12:00:00 +0000",
+  "message_id": "<12345.67890@example.com>",
+  "in_reply_to": "",
+  "references": "",
+  "return_path": "<sender@example.com>",
+  "received": [
+    "from mail.example.com (mail.example.com [192.168.1.1])\tby server.example.com (Postfix) with ESMTP id 1234567890\tfor <recipient@example.org>; Mon, 1 Jan 2023 12:00:00 +0000 (UTC)",
+    "from client.example.net (client.example.net [192.168.2.2])\tby mail.example.com (Postfix) with ESMTP id 0987654321\tfor <recipient@example.org>; Mon, 1 Jan 2023 11:59:50 +0000 (UTC)"
+  ],
+  "x_headers": {
+    "X-Mailer": "Example Mailer 1.0",
+    "X-Priority": "3",
+    "X-Spam-Status": "No, score=-2.0",
+    "X-Originating-IP": "[192.168.2.2]",
+    "X-Original-Authentication-Results": "example.com; dkim=pass; spf=pass",
+    "X-Custom-Header": "Custom Value"
+  },
+  "dkim": "v=1; a=rsa-sha256; c=relaxed/relaxed; d=example.com; s=selector;\tt=1672574390; h=from:to:subject:date:message-id:mime-version;\tbh=1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef;\tb=1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\t1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+  "spf": "pass (example.com: domain of sender@example.com designates 192.168.1.1 as permitted sender) client-ip=192.168.1.1; envelope-from=sender@example.com; helo=mail.example.com;",
+  "authentication_results": "server.example.com;\tdkim=pass header.d=example.com header.s=selector header.b=1234abcd;\tspf=pass (example.com: domain of sender@example.com designates 192.168.1.1 as permitted sender) smtp.mailfrom=sender@example.com;\tdmarc=pass (policy=none) header.from=example.com",
+  "content_type": "multipart/alternative; boundary=\"boundary-string\"",
+  "user_agent": "",
+  "mime_version": "1.0",
+  "from_email": "sender@example.com",
+  "to_emails": [
+    "recipient@example.org",
+    "support@example.net"
+  ],
+  "cc_emails": [
+    "manager@example.com"
+  ],
+  "bcc_emails": [
+    "archive@example.com"
+  ],
+  "ip_addresses": [
+    "192.168.1.1",
+    "192.168.2.2"
+  ],
+  "domains": [
+    "example.com",
+    "example.org",
+    "example.net"
+  ]
+}

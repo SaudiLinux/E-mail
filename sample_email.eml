@@ -1,0 +1,82 @@
+Return-Path: <sender@example.com>
+Received: from mail.example.com (mail.example.com [192.168.1.1])
+	by server.example.com (Postfix) with ESMTP id 1234567890
+	for <recipient@example.org>; Mon, 1 Jan 2023 12:00:00 +0000 (UTC)
+Received: from client.example.net (client.example.net [192.168.2.2])
+	by mail.example.com (Postfix) with ESMTP id 0987654321
+	for <recipient@example.org>; Mon, 1 Jan 2023 11:59:50 +0000 (UTC)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=example.com; s=selector;
+	t=1672574390; h=from:to:subject:date:message-id:mime-version;
+	bh=1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef;
+	b=1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+	1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+Authentication-Results: server.example.com;
+	dkim=pass header.d=example.com header.s=selector header.b=1234abcd;
+	spf=pass (example.com: domain of sender@example.com designates 192.168.1.1 as permitted sender) smtp.mailfrom=sender@example.com;
+	dmarc=pass (policy=none) header.from=example.com
+Received-SPF: pass (example.com: domain of sender@example.com designates 192.168.1.1 as permitted sender) client-ip=192.168.1.1; envelope-from=sender@example.com; helo=mail.example.com;
+From: "John Doe" <sender@example.com>
+To: "Jane Smith" <recipient@example.org>, "Support Team" <support@example.net>
+Cc: "Manager" <manager@example.com>
+Bcc: "Archive" <archive@example.com>
+Subject: Important Information About Your Account
+Date: Mon, 1 Jan 2023 12:00:00 +0000
+Message-ID: <12345.67890@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="boundary-string"
+X-Mailer: Example Mailer 1.0
+X-Priority: 3
+X-Spam-Status: No, score=-2.0
+X-Originating-IP: [192.168.2.2]
+X-Original-Authentication-Results: example.com; dkim=pass; spf=pass
+X-Custom-Header: Custom Value
+
+--boundary-string
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+Dear Jane,
+
+This is an important message regarding your account at Example Service.
+
+We have noticed some unusual activity and would like to verify your recent login from a new location. If this was you, please ignore this message. If not, please contact our support team immediately at support@example.net.
+
+Your security is our top priority.
+
+Best regards,
+John Doe
+Customer Support
+Example Company
+Tel: +1-234-567-8900
+Email: sender@example.com
+
+--boundary-string
+Content-Type: text/html; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Important Information</title>
+</head>
+<body>
+  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <h2 style="color: #3498db;">Important Account Information</h2>
+    <p>Dear Jane,</p>
+    <p>This is an important message regarding your account at <strong>Example Service</strong>.</p>
+    <p>We have noticed some unusual activity and would like to verify your recent login from a new location. If this was you, please ignore this message. If not, please contact our support team immediately at <a href="mailto:support@example.net">support@example.net</a>.</p>
+    <p><em>Your security is our top priority.</em></p>
+    <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px;">
+      <p>Best regards,<br>
+      John Doe<br>
+      Customer Support<br>
+      Example Company<br>
+      Tel: +1-234-567-8900<br>
+      Email: <a href="mailto:sender@example.com">sender@example.com</a></p>
+    </div>
+  </div>
+</body>
+</html>
+
+--boundary-string--
